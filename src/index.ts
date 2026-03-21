@@ -4,26 +4,34 @@ import { z } from "zod";
 const app = express();
 app.use(express.json());
 
-interface Task {
+const createTaskSchema = z.object({
+  title: z.string({ required_error: "Title is required" }).min(1, "Title is required"),
+  status: z.enum(["todo", "in_progress", "done"]).default("todo"),
+  assignee: z.string().optional()
+});
+
+type TaskInput = z.infer<typeof createTaskSchema>;
+
+type Task = TaskInput & {
   id: string;
-  title: string;
-  status: "todo" | "in_progress" | "done";
-  assignee?: string;
   created_at: string;
-}
+};
 
-// In-memory store
 const tasks: Task[] = [];
-
-// BUG: No input validation on POST
 app.post("/tasks", (req, res) => {
+  const result = createTaskSchema.safeParse(req.body);
+  if (!result.success) {
+    return res.status(400).json({
+      error: result.error.issues[0].message
+    });
+  }
+
   const task: Task = {
     id: String(tasks.length + 1),
-    title: req.body.title,
-    status: req.body.status || "todo",
-    assignee: req.body.assignee,
     created_at: new Date().toISOString(),
+    ...result.data
   };
+
   tasks.push(task);
   res.status(201).json(task);
 });
